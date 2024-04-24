@@ -74,13 +74,29 @@ async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     print(">> _USERS_CHAT_IDS: ", _USERS_CHAT_IDS)
     print(">> _USERS_LOCATIONS: ", _USERS_LOCATIONS)
 
+    for _, u_chat_id in _USERS_CHAT_IDS.items():
+        if u_chat_id != message.chat_id:
+            await ctx.bot.send_message(
+                chat_id=u_chat_id,
+                text=f"__{user_new_name} joined the area__",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+
+    suggest_to_connect = (
+        (
+            f"There is ({len(_USERS_CHAT_IDS)-1}) people in the same 'area' than "
+            "you and they just get notified.\n"
+            "Feel free to say 'hi'.\n"
+        )
+        if len(_USERS_CHAT_IDS) > 1
+        else ("0 users here for now.\n")
+    )
     await message.reply_markdown(
         text=(
             f"Location received !!!\n"
-            f"Now, your're **{user_new_name}**."
-            f"There are ({len(_USERS_CHAT_IDS)-1}) people in the same 'area' than you and they just get notified."
-            "Feel free to say 'hi'."
-            "Note: Everything here is encrypted and the chat will be cleaned when you change place."
+            f"Now, your're ***__{user_new_name}__***.\n"
+            f"{suggest_to_connect}\n"
+            "Note: Everything here is encrypted and the chat will be cleaned when you change place.\n"
         )
     )
     _LOGGER.info(f"/location :: send_message :: {user_new_name=}")

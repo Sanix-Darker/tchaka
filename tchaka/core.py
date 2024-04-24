@@ -1,6 +1,7 @@
 from functools import lru_cache
 from math import radians, sin, cos, sqrt, atan2
 
+
 @lru_cache
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """
@@ -19,6 +20,7 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
     distance = 6371 * c  # Radius of Earth in kilometers (BY THE WAY)
     return distance
+
 
 # FIXME : PLEASE: this is not optimal at all LMAO
 # (will fix that when i have more time)
