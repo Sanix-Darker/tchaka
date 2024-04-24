@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "tchaka"
+version = "0.1.0"
+description = "Euphemeral chat based on the position"
+authors = ["sanix-darker <s4nixd@gmail.com>"]
+license = "Apache"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+python-telegram-bot = "^21.0.1"
+python-dotenv = "*"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "*"
+mypy = "*"
+pytest = "*"
+trio = "*"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # poetry
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+        prod-deps:
+          dependency-type: "production"
+        dev-deps:
+          dependency-type: "development"
+  # GH actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

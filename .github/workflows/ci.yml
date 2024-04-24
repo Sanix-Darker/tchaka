@@ -1,0 +1,34 @@
+name: CI (bot)
+
+on: [push]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ['3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install poetry
+      run: |
+        pip install -U pip poetry
+        poetry config virtualenvs.create false
+
+    - name: Install dependencies
+      run: make install
+
+    - name: Lint
+      run: make lint
+
+    - name: Test
+      run: make test
+      timeout-minutes: 25
