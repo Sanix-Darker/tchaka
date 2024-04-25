@@ -56,27 +56,30 @@ async def dispatch_msg_in_group(
 ) -> None:
     global _USERS_CHAT_IDS
 
-    if not (user_location := _USERS.get(user_new_name)):
+    if not (current_user_infos := _USERS.get(user_new_name)):
         # User not found in the locations dictionary
         return
+
+    user_location = current_user_infos[1]
 
     # FIXME: this need to be fast... i had to use combined
     # list comprehension but yeah... it's not optimal yet
     # will fix later (MAYBE).
+
+    # Extract chat IDs from the group
+    # and send messages
     (
-        # Extract chat IDs from the group
-        # and send messages
-        (
-            await ctx.bot.send_message(
-                chat_id=user_infos[0],  # chat_id
-                text=await safe_truncate(message),
-                parse_mode=ParseMode.MARKDOWN,
-            )
-            for username, user_infos in _USERS.items()
-            if username != user_new_name and user_infos[1] in grp_list_locations
+        ctx.bot.send_message(
+            chat_id=chat_id,
+            text=await safe_truncate(message),
+            parse_mode=ParseMode.MARKDOWN,
         )
+        # LOL
         for _, grp_list_locations in _GROUPS.items()
         if user_location in grp_list_locations
+        for username, user_infos in _USERS.items()
+        if username != user_new_name and user_infos[1] in grp_list_locations
+        for chat_id in [user_infos[0]]
     )
 
 
