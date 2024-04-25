@@ -1,11 +1,15 @@
-from functools import lru_cache
 import json
 from typing import Any
 from telegram import Update
 import html
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from tchaka.core import group_coordinates
+from tchaka.core import (
+    dispatch_msg_in_group,
+    get_username_from_chat_id,
+    notify_all_user_on_the_same_group_for_join,
+    populate_new_user_to_appropriate_group,
+)
 from tchaka.utils import (
     build_user_hash,
     build_welcome_location_message_for_current_user,
@@ -46,94 +50,27 @@ async def help_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     # _LOGGER.info(f"/help :: send_message :: {message.chat_id=}")
 
 
-@lru_cache
-def get_username_from_chat_id(chat_id: int) -> str:
-    global _USERS
-
-    return next(
-        (
-            username
-            for username, chat_id_and_locations in _USERS.items()
-            if chat_id_and_locations[0] == chat_id
-        ),
-    )
-
-
 async def echo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     EchoCallBack to respond with a small help message.
 
     """
-    _, message = await get_user_and_message(update)
+    global _USERS, _GROUPS
 
+    _, message = await get_user_and_message(update)
     message_txt = await safe_truncate(message.text)
 
-    if user_new_name := get_username_from_chat_id(message.chat_id):
+    if user_new_name := get_username_from_chat_id(message.chat_id, _USERS):
         await dispatch_msg_in_group(
-            ctx=ctx, user_new_name=user_new_name, message=message_txt
+            ctx=ctx,
+            user_new_name=user_new_name,
+            message=message_txt,
+            user_list=_USERS,
+            group_list=_GROUPS,
         )
         _LOGGER.info(f"/echo :: send_message :: {user_new_name=} :: {message_txt}")
     else:
         _LOGGER.warning(f"/echo :: send_message :: {user_new_name=} :: {message_txt}")
-
-
-async def dispatch_msg_in_group(
-    ctx: ContextTypes.DEFAULT_TYPE, user_new_name: str, message: str
-) -> None:
-    global _USERS
-
-    if not (current_user_infos := _USERS.get(user_new_name)):
-        # User not found in the locations dictionary
-        return
-
-    user_location = current_user_infos[1]
-
-    # FIXME: this need to be fast... i had to use combined
-    # list comprehension but yeah... it's not optimal yet
-    # will fix later (or MAYBE not lol).
-
-    for _, grp_list_locations in _GROUPS.items():
-        if user_location in grp_list_locations:
-            # Send message to all chat IDs in the group
-            for usr, chat_id in {
-                username: user_infos[0]
-                for username, user_infos in _USERS.items()
-                if username != user_new_name and user_infos[1] in grp_list_locations
-            }.items():
-                await ctx.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"___***`{usr}`***___ \n\n{await safe_truncate(message)}",
-                    parse_mode=ParseMode.MARKDOWN,
-                )
-            return
-
-
-async def notify_all_user_on_the_same_group_for_join(
-    ctx: ContextTypes.DEFAULT_TYPE, current_chat_id: int, user_new_name: str
-) -> None:
-    global _USERS
-
-    (
-        await ctx.bot.send_message(
-            chat_id=chat_id_and_location[0],
-            text=f"__{user_new_name} joined the area__",
-            parse_mode=ParseMode.MARKDOWN,
-        )
-        for _, chat_id_and_location in _USERS.items()
-        if chat_id_and_location[0] != current_chat_id
-    )
-
-
-async def populate_new_user_to_appropriate_group(
-    user_new_name: str, current_chat_id: int, latitude: float, longitude: float
-) -> None:
-    global _GROUPS, _USERS
-
-    _USERS[user_new_name] = [current_chat_id, (latitude, longitude)]
-    _GROUPS = await group_coordinates(
-        coordinates=[user_info[1] for user_info in _USERS.values()],
-        distance_threshold=100,
-    )
 
 
 async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -141,7 +78,7 @@ async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     LocationCallBack to handle location messages.
 
     """
-    global _USERS
+    global _USERS, _GROUPS
 
     user, message = await get_user_and_message(update)
     user_new_name = await build_user_hash(user.full_name)
@@ -149,26 +86,32 @@ async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not (location := message.location):
         raise Exception("Location unable to be extracted ")
 
-    await populate_new_user_to_appropriate_group(
+    if user_and_group := await populate_new_user_to_appropriate_group(
         user_new_name=user_new_name,
         current_chat_id=message.chat_id,
         latitude=location.latitude,
         longitude=location.longitude,
-    )
+        user_list=_USERS,
+        group_list=_GROUPS,
+    ):
+        _USERS, _GROUPS = user_and_group
 
-    await notify_all_user_on_the_same_group_for_join(
-        ctx=ctx, current_chat_id=message.chat_id, user_new_name=user_new_name
-    )
-
-    await message.reply_markdown(
-        text=build_welcome_location_message_for_current_user(
-            user_new_name,
-            _USERS,
-            user.language_code or "en",
+        await notify_all_user_on_the_same_group_for_join(
+            ctx=ctx,
+            current_chat_id=message.chat_id,
+            user_new_name=user_new_name,
+            user_list=_USERS,
         )
-    )
 
-    _LOGGER.info(f"/location :: location_callback :: {user_new_name=}")
+        await message.reply_markdown(
+            text=build_welcome_location_message_for_current_user(
+                user_new_name,
+                _USERS,
+                user.language_code or "en",
+            )
+        )
+
+        _LOGGER.info(f"/location :: location_callback :: {user_new_name=}")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
