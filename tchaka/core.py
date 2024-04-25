@@ -4,7 +4,7 @@ from typing import Any
 
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-
+from telegram.error import Forbidden
 from tchaka.utils import safe_truncate
 
 
@@ -119,21 +119,22 @@ async def notify_all_user_on_the_same_group_for_join(
     current_chat_id: int,
     user_new_name: str,
     user_list: dict[str, Any],
-) -> list:
+) -> None:
     """
     Ping all users in the same group as the current that he/she/... joined
 
     """
 
-    return [
-        await ctx.bot.send_message(
-            chat_id=chat_id_and_location[0],
-            text=f"__{user_new_name} joined the area__",
-            parse_mode=ParseMode.MARKDOWN,
-        )
-        for _, chat_id_and_location in user_list.items()
-        if chat_id_and_location[0] != current_chat_id
-    ]
+    for _, chat_id_and_location in user_list.items():
+        if chat_id_and_location[0] != current_chat_id:
+            try:
+                await ctx.bot.send_message(
+                    chat_id=chat_id_and_location[0],
+                    text=f"__{user_new_name} joined the area__",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            except Forbidden as excp:
+                print(f"WOUPS {chat_id_and_location[0]}", excp)
 
 
 async def populate_new_user_to_appropriate_group(
