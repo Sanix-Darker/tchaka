@@ -95,7 +95,7 @@ async def dispatch_msg_in_group(
         return
 
     # FIXME: this need to be fast... i had to use combined
-    # list comprehension but yeah... it's not optimal yet
+    # those ugly loops... it's not optimal yet
     # will fix later (or MAYBE not lol).
 
     for _, grp_list_locations in group_list.items():

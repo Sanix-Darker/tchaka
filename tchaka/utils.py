@@ -11,9 +11,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 async def safe_truncate(message: str | None, at: int = 100) -> str:
-    if message is None:
-        return ""
-    return message[:at]
+    return message[:at] if message else ""
 
 
 @lru_cache
