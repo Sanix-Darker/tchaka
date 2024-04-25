@@ -1,4 +1,5 @@
 import json
+from typing import Any
 from telegram import Update
 import html
 from telegram.constants import ParseMode
@@ -9,9 +10,8 @@ from tchaka.config import DEVELOPER_CHAT_ID, LANG_MESSAGES
 import traceback
 
 _LOGGER = logging.getLogger(__name__)
-_USERS_LOCATIONS = {}
-_USERS_CHAT_IDS = {}
-_GROUPS = {}
+_USERS: dict[str, Any] = {}
+_GROUPS: dict[str, Any] = {}
 
 
 async def start_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -51,44 +51,94 @@ async def echo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     _LOGGER.info(f"/echo :: send_message :: {user.full_name=} :: {message_txt}")
 
 
+async def dispatch_msg_in_group(
+    ctx: ContextTypes.DEFAULT_TYPE, user_new_name: str, message: str
+) -> None:
+    global _USERS_CHAT_IDS
+
+    if not (user_location := _USERS.get(user_new_name)):
+        # User not found in the locations dictionary
+        return
+
+    # FIXME: this need to be fast... i had to use combined
+    # list comprehension but yeah... it's not optimal yet
+    # will fix later (MAYBE).
+    (
+        # Extract chat IDs from the group
+        # and send messages
+        (
+            await ctx.bot.send_message(
+                chat_id=user_infos[0],  # chat_id
+                text=await safe_truncate(message),
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            for username, user_infos in _USERS.items()
+            if username != user_new_name and user_infos[1] in grp_list_locations
+        )
+        for _, grp_list_locations in _GROUPS.items()
+        if user_location in grp_list_locations
+    )
+
+
+async def notify_same_group_on_join(
+    ctx: ContextTypes.DEFAULT_TYPE, current_chat_id: int, user_new_name: str
+) -> None:
+    global _USERS_CHAT_IDS
+
+    (
+        await ctx.bot.send_message(
+            chat_id=u_chat_id,
+            text=f"__{user_new_name} joined the area__",
+            parse_mode=ParseMode.MARKDOWN,
+        )
+        for u_chat_id in _USERS.keys()
+        if u_chat_id != current_chat_id
+    )
+
+
+async def populate_new_user_group(
+    user_new_name: str, current_chat_id: int, latitude: float, longitude: float
+) -> None:
+    global _GROUPS, _USERS
+
+    _USERS[user_new_name] = [current_chat_id, (latitude, longitude)]
+    _GROUPS = await group_coordinates(
+        coordinates=[user_info[1] for user_info in _USERS.values()],
+        distance_threshold=100,
+    )
+
+
 async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
     LocationCallBack to handle location messages.
 
     """
+    global _USERS
+
     user, message = await get_user_and_message(update)
     user_new_name = await build_user_hash(user.full_name)
 
     if not (location := message.location):
         raise Exception("Location unable to be extracted ")
 
-    _USERS_LOCATIONS[user_new_name] = (location.latitude, location.longitude)
-    _USERS_CHAT_IDS[user_new_name] = message.chat_id
-
-    _GROUPS = await group_coordinates(
-        coordinates=list(_USERS_LOCATIONS.values()),
-        distance_threshold=100,
+    await populate_new_user_group(
+        user_new_name=user_new_name,
+        current_chat_id=message.chat_id,
+        latitude=location.latitude,
+        longitude=location.longitude,
     )
 
-    print(">> _GROUPS: ", _GROUPS)
-    print(">> _USERS_CHAT_IDS: ", _USERS_CHAT_IDS)
-    print(">> _USERS_LOCATIONS: ", _USERS_LOCATIONS)
-
-    for _, u_chat_id in _USERS_CHAT_IDS.items():
-        if u_chat_id != message.chat_id:
-            await ctx.bot.send_message(
-                chat_id=u_chat_id,
-                text=f"__{user_new_name} joined the area__",
-                parse_mode=ParseMode.MARKDOWN,
-            )
+    await notify_same_group_on_join(
+        ctx=ctx, current_chat_id=message.chat_id, user_new_name=user_new_name
+    )
 
     suggest_to_connect = (
         (
-            f"There is ({len(_USERS_CHAT_IDS)-1}) people in the same 'area' than "
+            f"There is ({len(_USERS)-1}) people in the same 'area' than "
             "you and they just get notified.\n"
             "Feel free to say 'hi'.\n"
         )
-        if len(_USERS_CHAT_IDS) > 1
+        if len(_USERS) > 1
         else ("0 users here for now.\n")
     )
     await message.reply_markdown(

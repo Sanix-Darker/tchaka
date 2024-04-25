@@ -27,14 +27,14 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 async def group_coordinates(
     coordinates: list[tuple[float, float]],
     distance_threshold: int = 100,
-) -> dict[str, tuple]:
+) -> dict[str, list]:
     """
     Group coordinates based on their proximity within a certain distance threshold.
     Returns a dictionary with group IDs as keys and lists of coordinates as values.
 
     """
 
-    groups = {}
+    groups: dict[str, list] = {}
     for coord in coordinates:
         group_found = False
         for group_id, group_coords in groups.items():
