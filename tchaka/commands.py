@@ -1,3 +1,4 @@
+from functools import lru_cache
 import json
 from typing import Any
 from telegram import Update
@@ -5,7 +6,13 @@ import html
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from tchaka.core import group_coordinates
-from tchaka.utils import build_user_hash, get_user_and_message, safe_truncate, logging
+from tchaka.utils import (
+    build_user_hash,
+    build_welcome_location_message_for_current_user,
+    get_user_and_message,
+    safe_truncate,
+    logging,
+)
 from tchaka.config import DEVELOPER_CHAT_ID, LANG_MESSAGES
 import traceback
 
@@ -36,7 +43,20 @@ async def help_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     help_message = LANG_MESSAGES[user.language_code or "en"]["HELP_MESSAGE"]
     await message.reply_text(text=f"{help_message}")
-    _LOGGER.info(f"/help :: send_message :: {user.full_name=}")
+    # _LOGGER.info(f"/help :: send_message :: {message.chat_id=}")
+
+
+@lru_cache
+def get_username_from_chat_id(chat_id: int) -> str:
+    global _USERS
+
+    return next(
+        (
+            username
+            for username, chat_id_and_locations in _USERS.items()
+            if chat_id_and_locations[0] == chat_id
+        ),
+    )
 
 
 async def echo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -44,17 +64,23 @@ async def echo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     EchoCallBack to respond with a small help message.
 
     """
-    user, message = await get_user_and_message(update)
+    _, message = await get_user_and_message(update)
 
     message_txt = await safe_truncate(message.text)
-    # TODO: do something here when needed
-    _LOGGER.info(f"/echo :: send_message :: {user.full_name=} :: {message_txt}")
+
+    if user_new_name := get_username_from_chat_id(message.chat_id):
+        await dispatch_msg_in_group(
+            ctx=ctx, user_new_name=user_new_name, message=message_txt
+        )
+        _LOGGER.info(f"/echo :: send_message :: {user_new_name=} :: {message_txt}")
+    else:
+        _LOGGER.warning(f"/echo :: send_message :: {user_new_name=} :: {message_txt}")
 
 
 async def dispatch_msg_in_group(
     ctx: ContextTypes.DEFAULT_TYPE, user_new_name: str, message: str
 ) -> None:
-    global _USERS_CHAT_IDS
+    global _USERS
 
     if not (current_user_infos := _USERS.get(user_new_name)):
         # User not found in the locations dictionary
@@ -64,42 +90,41 @@ async def dispatch_msg_in_group(
 
     # FIXME: this need to be fast... i had to use combined
     # list comprehension but yeah... it's not optimal yet
-    # will fix later (MAYBE).
+    # will fix later (or MAYBE not lol).
 
-    # Extract chat IDs from the group
-    # and send messages
-    (
-        ctx.bot.send_message(
-            chat_id=chat_id,
-            text=await safe_truncate(message),
-            parse_mode=ParseMode.MARKDOWN,
-        )
-        # LOL
-        for _, grp_list_locations in _GROUPS.items()
-        if user_location in grp_list_locations
-        for username, user_infos in _USERS.items()
-        if username != user_new_name and user_infos[1] in grp_list_locations
-        for chat_id in [user_infos[0]]
-    )
+    for _, grp_list_locations in _GROUPS.items():
+        if user_location in grp_list_locations:
+            # Send message to all chat IDs in the group
+            for usr, chat_id in {
+                username: user_infos[0]
+                for username, user_infos in _USERS.items()
+                if username != user_new_name and user_infos[1] in grp_list_locations
+            }.items():
+                await ctx.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"___***`{usr}`***___ \n\n{await safe_truncate(message)}",
+                    parse_mode=ParseMode.MARKDOWN,
+                )
+            return
 
 
-async def notify_same_group_on_join(
+async def notify_all_user_on_the_same_group_for_join(
     ctx: ContextTypes.DEFAULT_TYPE, current_chat_id: int, user_new_name: str
 ) -> None:
-    global _USERS_CHAT_IDS
+    global _USERS
 
     (
         await ctx.bot.send_message(
-            chat_id=u_chat_id,
+            chat_id=chat_id_and_location[0],
             text=f"__{user_new_name} joined the area__",
             parse_mode=ParseMode.MARKDOWN,
         )
-        for u_chat_id in _USERS.keys()
-        if u_chat_id != current_chat_id
+        for _, chat_id_and_location in _USERS.items()
+        if chat_id_and_location[0] != current_chat_id
     )
 
 
-async def populate_new_user_group(
+async def populate_new_user_to_appropriate_group(
     user_new_name: str, current_chat_id: int, latitude: float, longitude: float
 ) -> None:
     global _GROUPS, _USERS
@@ -124,40 +149,26 @@ async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     if not (location := message.location):
         raise Exception("Location unable to be extracted ")
 
-    await populate_new_user_group(
+    await populate_new_user_to_appropriate_group(
         user_new_name=user_new_name,
         current_chat_id=message.chat_id,
         latitude=location.latitude,
         longitude=location.longitude,
     )
 
-    await notify_same_group_on_join(
+    await notify_all_user_on_the_same_group_for_join(
         ctx=ctx, current_chat_id=message.chat_id, user_new_name=user_new_name
     )
 
-    suggest_to_connect = (
-        (
-            f"There is ({len(_USERS)-1}) people in the same 'area' than "
-            "you and they just get notified.\n"
-            "Feel free to say 'hi'.\n"
-        )
-        if len(_USERS) > 1
-        else ("0 users here for now.\n")
-    )
     await message.reply_markdown(
-        text=(
-            f"Location received !!!\n"
-            f"Now, your're ***__{user_new_name}__***.\n"
-            f"{suggest_to_connect}\n"
-            "Note: Everything here is encrypted and the chat will be cleaned when you change place.\n"
+        text=build_welcome_location_message_for_current_user(
+            user_new_name,
+            _USERS,
+            user.language_code or "en",
         )
     )
-    _LOGGER.info(f"/location :: send_message :: {user_new_name=}")
 
-
-# TODO:
-# dir (list files)
-# search (search for files)
+    _LOGGER.info(f"/location :: location_callback :: {user_new_name=}")
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:

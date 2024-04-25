@@ -10,18 +10,22 @@ VERSION = os.getenv("VERSION")
 LANG_MESSAGES = {
     "fr": {
         "WELCOME_MESSAGE": """Bienvenue sur Tchaka!
-Votre Chat_id est:""",
-        "HELP_MESSAGE": """/start - Pour obtenir votre chat_id.
+Commencez par envoyer votre localisation (aucun soucis, c'est anonyme et rien
+ne se sauvegardes.):""",
+        "HELP_MESSAGE": """/start - Pour demarrer.
 /help - Comment cela fonctionne.
+/stop - Pour stoper le bot et cleaner toutes vos infos.
 
-Si vous avez toujours un problème, veuillez contacter le dév à
+Si vous avez toujours un problème, veuillez contacter le dév
 @sanixdarker.""",
     },
     "en": {
         "WELCOME_MESSAGE": """Welcome to Tchaka!
-Your Chat_id is :""",
-        "HELP_MESSAGE": """/start - To get your chat_id.
-/help - How it works.
+Start by sending your localisation and get guided (No worries, it's anonym and
+not stored):""",
+        "HELP_MESSAGE": """/start - To get started.
+/help - How it works
+/stop - To Stop the bot and clean all your infos.
 
 If you still have a
 problem, please contact the developer at @sanixdarker.

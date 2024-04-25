@@ -15,7 +15,6 @@ $ docker build -t tchaka:latest -f ./Dockerfile .
 $ docker run -ti tchaka
 INFO:__main__:tchaka v0.0.1 started successfully...
 INFO:telegram.ext.Application:Application started
-INFO:tchaka.commands:/start :: send_message :: user.full_name='d4rk3r .'
 ```
 
 ### NO DOCKER
@@ -32,7 +31,6 @@ $ make run
 python -m tchaka.main
 INFO:__main__:tchaka v0.0.1 started successfully...
 INFO:telegram.ext.Application:Application started
-INFO:tchaka.commands:/start :: send_message :: user.full_name='d4rk3r .'
 ```
 
 ### BONUS (for dev)
