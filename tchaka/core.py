@@ -100,7 +100,6 @@ async def dispatch_msg_in_group(
                             text=f"___***`{usr}`***___ \n\n{await safe_truncate(message)}",
                             parse_mode=ParseMode.MARKDOWN,
                         )
-                        print(f">> {usr} sent message | ", end="")
                     except Exception as excp:
                         # pass the iteration on next step on error
                         _LOGGER.warning(
