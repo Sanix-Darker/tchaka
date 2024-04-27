@@ -1,6 +1,15 @@
 import pytest
 
-from tchaka.core import group_coordinates, haversine_distance
+from unittest.mock import AsyncMock
+from pytest_mock import MockType, MockerFixture
+
+from tchaka.core import (
+    dispatch_msg_in_group,
+    group_coordinates,
+    haversine_distance,
+    notify_all_user_on_the_same_group_for_join,
+    populate_new_user_to_appropriate_group,
+)
 
 
 @pytest.mark.anyio
@@ -48,3 +57,66 @@ async def test_group_coordinates():
                     )
                     <= 100
                 )
+
+
+@pytest.mark.anyio
+async def test_dispatch_msg_in_group(mocker: MockerFixture) -> None:
+    ctx_mock = mocker.Mock()
+    ctx_mock.bot.send_message = AsyncMock()
+
+    user_list = {
+        "user1": [123, (5.2, 64.0)],
+        "user2": [552, (5.3, 60.0)],
+        "user3": [456, (7.0, 80.0)],
+    }
+    group_list = {
+        "group1": [(5.2, 64.0), (5.3, 60.0)],
+        "group2": [(7.0, 80.0)],
+    }
+
+    await dispatch_msg_in_group(
+        ctx_mock, "user1", "Test message", user_list, group_list
+    )
+
+    assert ctx_mock.bot.send_message.call_count == 1
+
+
+@pytest.mark.anyio
+async def test_notify_all_user_on_the_same_group_for_join(
+    mocker: MockerFixture,
+) -> None:
+    ctx_mock = mocker.Mock()
+    ctx_mock.bot.send_message = AsyncMock()
+
+    user_list = {
+        "user1": [123, (50.0, 60.0)],
+        "user2": [456, (70.0, 80.0)],
+    }
+
+    await notify_all_user_on_the_same_group_for_join(ctx_mock, 123, "user1", user_list)
+
+    assert ctx_mock.bot.send_message.call_count == 1
+
+
+@pytest.mark.anyio
+async def test_populate_new_user_to_appropriate_group(
+    mocker: MockType,
+) -> None:
+    mocker.patch(
+        "tchaka.core.group_coordinates", return_value={"group1": [(50.0, 60.0)]}
+    )
+
+    new_user_name = "user1"
+    current_chat_id = 123
+    latitude = 50.0
+    longitude = 60.0
+
+    (
+        updated_user_list,
+        updated_group_list,
+    ) = await populate_new_user_to_appropriate_group(
+        new_user_name, current_chat_id, latitude, longitude, {}, {}
+    )
+
+    assert updated_user_list == {"user1": [123, (50.0, 60.0)]}
+    assert updated_group_list == {"group1": [(50.0, 60.0)]}
