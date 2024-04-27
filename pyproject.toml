@@ -15,6 +15,7 @@ python-dotenv = "*"
 ruff = "*"
 mypy = "*"
 pytest = "*"
+pytest_mock = "*"
 trio = "*"
 
 [build-system]

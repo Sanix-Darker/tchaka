@@ -40,9 +40,7 @@ async def test_help_callback(update, context):
     update.effective_user.full_name = "John Doe"
     message = update.message.reply_text = AsyncMock()
     await help_callback(update, context)
-    message.assert_called_once_with(
-        text=ANY
-    )
+    message.assert_called_once_with(text=ANY)
 
 
 @pytest.mark.anyio
