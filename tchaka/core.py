@@ -6,6 +6,9 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from telegram.error import Forbidden
 from tchaka.utils import safe_truncate
+from tchaka.utils import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @lru_cache
@@ -60,24 +63,6 @@ async def group_coordinates(
     return groups
 
 
-def get_username_from_chat_id(
-    chat_id: int,
-    user_list: dict[str, Any],
-) -> str:
-    """
-    For a given chat-id, we introspect to get the relative chat-id
-
-    """
-
-    return next(
-        (
-            username
-            for username, chat_id_and_locations in user_list.items()
-            if chat_id_and_locations[0] == chat_id
-        ),
-    )
-
-
 async def dispatch_msg_in_group(
     ctx: ContextTypes.DEFAULT_TYPE,
     user_new_name: str,
@@ -99,18 +84,30 @@ async def dispatch_msg_in_group(
     # will fix later (or MAYBE not lol).
 
     for _, grp_list_locations in group_list.items():
-        if current_user_infos[1] in grp_list_locations:
-            # Send message to all chat IDs in the group
-            for usr, chat_id in {
-                username: user_infos[0]
-                for username, user_infos in user_list.items()
-                if username != user_new_name and user_infos[1] in grp_list_locations
-            }.items():
-                await ctx.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"___***`{usr}`***___ \n\n{await safe_truncate(message)}",
-                    parse_mode=ParseMode.MARKDOWN,
+        if current_user_infos in grp_list_locations:
+            try:
+                # Send message to all chat IDs in the group
+                for usr, chat_id in {
+                    username: user_infos[0]
+                    for username, user_infos in user_list.items()
+                    if username != user_new_name and user_infos[1] in grp_list_locations
+                }.items():
+                    try:
+                        await ctx.bot.send_message(
+                            chat_id=chat_id,
+                            text=f"___***`{usr}`***___ \n\n{await safe_truncate(message)}",
+                            parse_mode=ParseMode.MARKDOWN,
+                        )
+                    except Exception as excp:
+                        # pass the iteration on next step on error
+                        _LOGGER.warning(
+                            f"Unable to send message to {usr=}", exc_info=excp
+                        )
+            except Exception as excp:
+                _LOGGER.warning(
+                    "Error looping on chatIds to send message", exc_info=excp
                 )
+
             return
 
 
