@@ -79,12 +79,14 @@ async def dispatch_msg_in_group(
         # User not found in the locations dictionary
         return
 
+    current_user_location = current_user_infos[1]
+
     # FIXME: this need to be fast... i had to use combined
     # those ugly loops... it's not optimal yet
     # will fix later (or MAYBE not lol).
 
     for _, grp_list_locations in group_list.items():
-        if current_user_infos[1] in grp_list_locations:
+        if current_user_location in grp_list_locations:
             try:
                 # Send message to all chat IDs in the group
                 for usr, chat_id in {
