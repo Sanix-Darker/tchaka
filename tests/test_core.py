@@ -1,7 +1,8 @@
 import pytest
-
-from unittest.mock import AsyncMock
+from datetime import datetime
+from unittest.mock import AsyncMock, ANY
 from pytest_mock import MockType, MockerFixture
+from telegram import Message
 
 from tchaka.core import (
     dispatch_msg_in_group,
@@ -75,7 +76,16 @@ async def test_dispatch_msg_in_group(mocker: MockerFixture) -> None:
     }
 
     await dispatch_msg_in_group(
-        ctx_mock, "user1", "Test message", user_list, group_list
+        ctx_mock,
+        "user1",
+        Message(
+            message_id=1,
+            chat=ANY,
+            text="Test message",
+            date=datetime.now(),
+        ),
+        user_list,
+        group_list,
     )
 
     assert ctx_mock.bot.send_message.call_count == 1

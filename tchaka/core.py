@@ -1,7 +1,8 @@
-from functools import lru_cache
+from functools import lru_cache, partial
 from math import radians, sin, cos, sqrt, atan2
 from typing import Any
 
+from telegram import Message
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 from telegram.error import Forbidden
@@ -66,7 +67,7 @@ async def group_coordinates(
 async def dispatch_msg_in_group(
     ctx: ContextTypes.DEFAULT_TYPE,
     user_new_name: str,
-    message: str,
+    message: Message,
     user_list: dict[str, Any],
     group_list: dict[str, Any],
 ) -> None:
@@ -94,12 +95,33 @@ async def dispatch_msg_in_group(
                     for username, user_infos in user_list.items()
                     if username != user_new_name and user_infos[1] in grp_list_locations
                 }.items():
+                    msg = safe_truncate(message.text, 200)
+                    bot_send_message = partial(
+                        ctx.bot.send_message,
+                        chat_id=chat_id,
+                        text=f"__**{user_new_name}**__ \n\n{msg}",
+                        parse_mode=ParseMode.MARKDOWN,
+                    )
                     try:
-                        await ctx.bot.send_message(
-                            chat_id=chat_id,
-                            text=f"___***`{usr}`***___ \n\n{await safe_truncate(message)}",
-                            parse_mode=ParseMode.MARKDOWN,
+                        # If it's a reply, quote it
+                        if (
+                            (replying_to := message.reply_to_message) is not None
+                            and replying_to.text is not None
+                            and (quote_block := replying_to.text.split("\n"))
+                        ):
+                            # The quote is the last 10 chars
+                            quote_usr = quote_block[0]
+                            quote_msg = safe_truncate(quote_block[-1])
+                            await bot_send_message(
+                                text=f"__**{user_new_name}**__ \n```{quote_usr}{quote_msg}```\n {msg}",
+                            )
+                        else:
+                            await bot_send_message()
+                    except (ValueError, AssertionError) as excp:
+                        _LOGGER.warning(
+                            "ValueError | AssertionError maybe on reply", exc_info=excp
                         )
+                        await bot_send_message()
                     except Exception as excp:
                         # pass the iteration on next step on error
                         _LOGGER.warning(

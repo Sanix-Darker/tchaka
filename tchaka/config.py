@@ -5,7 +5,6 @@ load_dotenv()
 
 DEVELOPER_CHAT_ID = os.getenv("DEVELOPER_CHAT_ID")
 TG_TOKEN = os.getenv("TG_TOKEN")
-VERSION = os.getenv("VERSION")
 
 LANG_MESSAGES = {
     "fr": {

@@ -13,7 +13,6 @@ from tchaka.utils import (
     build_user_hash,
     build_welcome_location_message_for_current_user,
     get_user_and_message,
-    safe_truncate,
     logging,
 )
 from tchaka.config import DEVELOPER_CHAT_ID, LANG_MESSAGES
@@ -82,19 +81,29 @@ async def echo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     _, message = await get_user_and_message(update)
 
+    # assert update.message
+    # # Get the message text
+    # message_text = update.message.text
+    # assert update.effective_chat
+    # # Send a reply message quoting the original message
+    # await ctx.bot.send_message(
+    #     chat_id=update.effective_chat.id,
+    #     text=message_text or "",
+    #     reply_to_message_id=update.message.message_id,
+    #     parse_mode=ParseMode.MARKDOWN,
+    # )
+
     # SHould do nothing if the user is not yet in the system
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
         given_user_name = "New User"
         _LOGGER.info(f"/echo :: {given_user_name}")
         return
 
-    message_txt = await safe_truncate(message.text)
-
     if user_new_name := _CHAT_IDS.get(message.chat_id):
         await dispatch_msg_in_group(
             ctx=ctx,
             user_new_name=user_new_name,
-            message=message_txt,
+            message=message,
             user_list=_USERS,
             group_list=_GROUPS,
         )
