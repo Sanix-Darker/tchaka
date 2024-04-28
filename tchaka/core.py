@@ -104,17 +104,17 @@ async def dispatch_msg_in_group(
                     )
                     try:
                         # If it's a reply, quote it
-                        if replying_to := message.reply_to_message:
-                            assert replying_to.text is not None
-                            # the quote is the last 10 chars
-                            if quote_block := replying_to.text.split("\n"):
-                                quote_usr = quote_block[0]
-                                quote_msg = safe_truncate(quote_block[-1])
-                                await bot_send_message(
-                                    text=f"__**{user_new_name}**__ \n```{quote_usr}{quote_msg}```\n {msg}",
-                                )
-                            else:
-                                await bot_send_message()
+                        if (
+                            (replying_to := message.reply_to_message) is not None
+                            and replying_to.text is not None
+                            and (quote_block := replying_to.text.split("\n"))
+                        ):
+                            # The quote is the last 10 chars
+                            quote_usr = quote_block[0]
+                            quote_msg = safe_truncate(quote_block[-1])
+                            await bot_send_message(
+                                text=f"__**{user_new_name}**__ \n```{quote_usr}{quote_msg}```\n {msg}",
+                            )
                         else:
                             await bot_send_message()
                     except (ValueError, AssertionError) as excp:
