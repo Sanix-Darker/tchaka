@@ -10,8 +10,14 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.basicConfig(level=logging.INFO)
 
 
-async def safe_truncate(message: str | None, at: int = 100) -> str:
-    return message[:at] if message else ""
+def safe_truncate(message: str | None, at: int = 100) -> str:
+    message = message or ""
+
+    points = ""
+    if len(message) > at:
+        points = "..."
+
+    return message[:at] + points
 
 
 @lru_cache
@@ -40,7 +46,7 @@ async def build_user_hash(fullname: str) -> str:
 
     usr = sha256((fullname + f"salt-{randint(1, 100)}").encode()).hexdigest()
 
-    return f"u__{usr[:15]}"
+    return f"u__{usr[:5]}"
 
 
 def build_welcome_location_message_for_current_user(

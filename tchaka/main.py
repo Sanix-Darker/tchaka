@@ -9,7 +9,7 @@ from tchaka.commands import (
 from tchaka.utils import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-from tchaka.config import TG_TOKEN, VERSION
+from tchaka.config import TG_TOKEN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,4 +31,4 @@ if __name__ == "__main__":
     application.add_error_handler(error_handler)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-    _LOGGER.info(f"tchaka v{VERSION} started successfully...")
+    _LOGGER.info(f"tchaka started successfully...")
