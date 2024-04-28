@@ -22,8 +22,12 @@ def update() -> Update:
 @pytest.mark.anyio
 async def test_safe_truncate():
     message = "This is a test message"
-    truncated_message = safe_truncate(message, 10)
-    assert truncated_message == "This is a "
+    truncated_message = safe_truncate(message, 3)
+    assert truncated_message == "Thi..."
+
+    # No troncate nor points
+    truncated_message = safe_truncate(message, 100)
+    assert truncated_message == "This is a test message"
 
 
 @pytest.mark.anyio

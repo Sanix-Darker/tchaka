@@ -31,4 +31,4 @@ if __name__ == "__main__":
     application.add_error_handler(error_handler)
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-    _LOGGER.info(f"tchaka started successfully...")
+    _LOGGER.info("tchaka started successfully...")
