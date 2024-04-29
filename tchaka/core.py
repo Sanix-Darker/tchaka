@@ -1,3 +1,4 @@
+from asyncio import sleep
 from functools import lru_cache, partial
 from math import radians, sin, cos, sqrt, atan2
 from typing import Any
@@ -5,11 +6,12 @@ from typing import Any
 from telegram import Message
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
-from telegram.error import Forbidden
-from tchaka.utils import safe_truncate
+from telegram.error import Forbidden, BadRequest
+from tchaka.utils import html_format_text, safe_truncate
 from tchaka.utils import logging
 
 _LOGGER = logging.getLogger(__name__)
+MAX_BAD_REQUEST_ERROR = 10
 
 
 @lru_cache
@@ -76,6 +78,8 @@ async def dispatch_msg_in_group(
 
     """
 
+    from tchaka.commands import append_chat_ids_messages  # cuz circular import
+
     if not (current_user_infos := user_list.get(user_new_name)):
         # User not found in the locations dictionary
         return
@@ -102,6 +106,7 @@ async def dispatch_msg_in_group(
                         text=f"__**{user_new_name}**__ \n\n{msg}",
                         parse_mode=ParseMode.MARKDOWN,
                     )
+
                     try:
                         # If it's a reply, quote it
                         if (
@@ -115,13 +120,20 @@ async def dispatch_msg_in_group(
                             await bot_send_message(
                                 text=f"__**{user_new_name}**__ \n```{quote_usr}{quote_msg}```\n {msg}",
                             )
+
+                            assert message.reply_to_message is not None
+                            await append_chat_ids_messages(
+                                chat_id, message.reply_to_message.message_id
+                            )
                         else:
                             await bot_send_message()
+                            await append_chat_ids_messages(chat_id, message.message_id)
                     except (ValueError, AssertionError) as excp:
                         _LOGGER.warning(
                             "ValueError | AssertionError maybe on reply", exc_info=excp
                         )
                         await bot_send_message()
+                        await append_chat_ids_messages(chat_id, message.message_id)
                     except Exception as excp:
                         # pass the iteration on next step on error
                         _LOGGER.warning(
@@ -151,10 +163,10 @@ async def notify_all_user_on_the_same_group_for_join(
             try:
                 await ctx.bot.send_message(
                     chat_id=chat_id_and_location[0],
-                    text=f"__{user_new_name} joined the area__",
+                    text=html_format_text(f"{user_new_name} joined the area..."),
                     parse_mode=ParseMode.MARKDOWN,
                 )
-            except Forbidden as excp:
+            except (Forbidden, BadRequest) as excp:
                 _LOGGER.warning(f"WOUPS {chat_id_and_location[0]}", exc_info=excp)
 
 
@@ -178,3 +190,60 @@ async def populate_new_user_to_appropriate_group(
     )
 
     return user_list, group_list
+
+
+async def clean_all_msg(
+    message: Message,
+    ctx: ContextTypes.DEFAULT_TYPE,
+    list_of_msg_ids: list[int],
+) -> None:
+    """
+    ATTENTION: this method is CURSED and it's trying to self doing
+    something not implemented yet byt PTB API, will fix it later
+
+    In reverse, from the latest message_id
+    delete all messages sent on a chat
+    until error and stop
+
+    """
+
+    await sleep(1)
+
+    bad_request_count = 0
+    if not list_of_msg_ids:
+        messages_to_delete = message.message_id - 3
+        while True:
+            try:
+                await ctx.bot.delete_message(
+                    chat_id=message.chat_id,
+                    message_id=messages_to_delete,
+                )
+                messages_to_delete += 1
+            except BadRequest:
+                bad_request_count += 1
+                if bad_request_count == MAX_BAD_REQUEST_ERROR:
+                    break
+            except Exception as excp:
+                _LOGGER.warning("Deletion failed", exc_info=excp)
+                break
+    else:
+        for msg_id in list_of_msg_ids:
+            try:
+                # NOTE: Emulate do_while here to delete all messages between
+                # something sent from the user and all by the bot or other
+                # users.
+                # - 3 because we need to delete the '/stop' and the 'goodby message'
+                msg_id_to_delete = msg_id - 3
+                while True:
+                    await ctx.bot.delete_message(
+                        chat_id=message.chat_id,
+                        message_id=msg_id_to_delete,
+                    )
+                    msg_id_to_delete += 1
+            except BadRequest:
+                bad_request_count += 1
+                if bad_request_count == MAX_BAD_REQUEST_ERROR:
+                    break
+            except Exception as excp:
+                _LOGGER.warning("Deletion failed", exc_info=excp)
+                break

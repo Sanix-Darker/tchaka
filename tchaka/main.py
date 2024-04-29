@@ -1,10 +1,12 @@
 from telegram import Update
 from tchaka.commands import (
+    check_callback,
     echo_callback,
     location_callback,
     start_callback,
     help_callback,
     error_handler,
+    stop_callback,
 )
 from tchaka.utils import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
@@ -15,6 +17,8 @@ _LOGGER = logging.getLogger(__name__)
 
 HANDLERS = [
     CommandHandler("start", start_callback),
+    CommandHandler("stop", stop_callback),
+    CommandHandler("check", check_callback),
     CommandHandler("help", help_callback),
     MessageHandler(filters.LOCATION, location_callback),
     MessageHandler(filters.TEXT & ~filters.COMMAND, echo_callback),
