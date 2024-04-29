@@ -9,7 +9,7 @@ TG_TOKEN = os.getenv("TG_TOKEN")
 LANG_MESSAGES = {
     "fr": {
         "WELCOME_MESSAGE": """Bienvenue sur Tchaka!
-Commencez par envoyer votre localisation (aucun soucis, c'est anonyme et rien
+Commencez par envoyer votre localisation (aucun soucis, c est anonyme et rien
 ne se sauvegardes.):""",
         "HELP_MESSAGE": """/start - Pour demarrer.
 /help - Comment cela fonctionne.
@@ -20,7 +20,7 @@ Si vous avez toujours un problème, veuillez contacter le dév
     },
     "en": {
         "WELCOME_MESSAGE": """Welcome to Tchaka!
-Start by sending your localisation and get guided (No worries, it's anonym and
+Start by sending your localisation and get guided (No worries, it is anonym and
 not stored):""",
         "HELP_MESSAGE": """/start - To get started.
 /help - How it works

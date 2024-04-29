@@ -1,10 +1,15 @@
 from unittest.mock import ANY, AsyncMock, MagicMock
-
+from pytest_mock import MockerFixture
 import pytest
 from telegram import Message, Update, User
 from telegram.ext import ContextTypes
 
-from tchaka.commands import start_callback, help_callback, echo_callback
+from tchaka.commands import (
+    append_chat_ids_messages,
+    start_callback,
+    help_callback,
+    echo_callback,
+)
 
 
 @pytest.fixture
@@ -26,7 +31,10 @@ def context():
 
 
 @pytest.mark.anyio
-async def test_start_callback(update, context):
+async def test_start_callback(
+    mocker: MockerFixture, update: MagicMock, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    mocker.patch("tchaka.commands.append_chat_ids_messages")
     update.message.chat_id = 123
     update.effective_user.full_name = "John Doe"
     message = update.message.reply_text = AsyncMock()
@@ -35,7 +43,10 @@ async def test_start_callback(update, context):
 
 
 @pytest.mark.anyio
-async def test_help_callback(update, context):
+async def test_help_callback(
+    mocker: MockerFixture, update: MagicMock, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    mocker.patch("tchaka.commands.append_chat_ids_messages")
     update.message.chat_id = 123
     update.effective_user.full_name = "John Doe"
     message = update.message.reply_text = AsyncMock()
@@ -44,10 +55,22 @@ async def test_help_callback(update, context):
 
 
 @pytest.mark.anyio
-async def test_echo_callback(update, context):
+async def test_echo_callback(
+    update: MagicMock,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
     update.message.chat_id = 123
     update.effective_user.full_name = "John Doe"
     update.message.text = "This is a test message"
     await echo_callback(
         update, context
     )  # no errors for now, tests are going to be defined soon or later
+
+
+@pytest.mark.anyio
+async def test_attach_chat_id_to_message_ids(mocker: MockerFixture) -> None:
+    await append_chat_ids_messages(1, 34)
+    await append_chat_ids_messages(10, 234)
+
+    id_msgs = await append_chat_ids_messages(1, 40)
+    assert id_msgs == {1: [34, 35, 36, 37, 38, 39, 40], 10: [234]}
