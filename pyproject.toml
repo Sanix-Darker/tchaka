@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tchaka"
-version = "0.0.3"
+version = "0.1.0-alpha"
 description = "Euphemeral chat based on the position"
 authors = ["sanix-darker <s4nixd@gmail.com>"]
 license = "Apache"
