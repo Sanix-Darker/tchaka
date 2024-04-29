@@ -30,8 +30,7 @@ _GROUPS: dict[str, Any] = {}
 
 
 async def append_chat_ids_messages(
-    chat_id: int,
-    message_id: int
+    chat_id: int, message_id: int
 ) -> dict[int, list[int]]:
     global _CHAT_IDS_MSGS
 
