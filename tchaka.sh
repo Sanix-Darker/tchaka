@@ -1,1 +1,1 @@
-python -m tchaka.main
+docker run -ti -d tchaka
