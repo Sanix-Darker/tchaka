@@ -39,13 +39,15 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 async def group_coordinates(
     coordinates: list[tuple[float, float]],
     distance_threshold: int = 100,
-) -> dict[str, list]:
+    user_coords: tuple[float, float] | None = None,
+) -> tuple[dict[str, list], int]:
     """
     Group coordinates based on their proximity within a certain distance threshold.
     Returns a dictionary with group IDs as keys and lists of coordinates as values.
 
     """
 
+    users_in_same_group = 0
     groups: dict[str, list] = {}
     for coord in coordinates:
         group_found = False
@@ -59,11 +61,13 @@ async def group_coordinates(
             ):
                 groups[group_id].append(coord)
                 group_found = True
+                if user_coords and user_coords in groups[group_id]:
+                    users_in_same_group = len(groups[group_id])
                 break
         if not group_found:
             groups[f"___G-{len(groups)+1}"] = [coord]
 
-    return groups
+    return groups, users_in_same_group
 
 
 async def dispatch_msg_in_group(
@@ -177,19 +181,20 @@ async def populate_new_user_to_appropriate_group(
     longitude: float,
     user_list: dict[str, Any],
     group_list: dict[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
+) -> tuple[dict[str, Any], dict[str, Any], int]:
     """
     This method set the user infos and put him in a group
 
     """
 
     user_list[user_new_name] = [current_chat_id, (latitude, longitude)]
-    group_list = await group_coordinates(
+    group_list, user_same_group = await group_coordinates(
         coordinates=[user_info[1] for user_info in user_list.values()],
         distance_threshold=100,
+        user_coords=(latitude, longitude),
     )
 
-    return user_list, group_list
+    return user_list, group_list, user_same_group
 
 
 async def clean_all_msg(

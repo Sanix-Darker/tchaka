@@ -1,7 +1,9 @@
 ## TCHAKA
 
-This bot is a simple telegram bot that makes you in contacts with people
-'around you anonymously'.
+This bot makes you in contact with people 'around' you anonymously based on
+your localisation.
+
+No DATA saved + all IN MEMORY...
 
 ## HOW GET IT RUN
 
@@ -13,7 +15,7 @@ $ cp .env.example .env
 
 $ docker build -t tchaka:latest -f ./Dockerfile .
 $ docker run -ti tchaka
-INFO:__main__:tchaka v0.0.1 started successfully...
+INFO:__main__:tchaka started successfully...
 INFO:telegram.ext.Application:Application started
 ```
 
@@ -29,7 +31,7 @@ $ make install
 $ make run
 # to start the bot...
 python -m tchaka.main
-INFO:__main__:tchaka v0.0.1 started successfully...
+INFO:__main__:tchaka started successfully...
 INFO:telegram.ext.Application:Application started
 ```
 

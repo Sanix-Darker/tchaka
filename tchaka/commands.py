@@ -66,17 +66,23 @@ async def start_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 async def check_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
+    TODO: not working yet, will be fixed in future version
     CheckCallBack to check how many people are in the area
 
     """
 
     _, message = await get_user_and_message(update)
 
+    await append_chat_ids_messages(message.chat_id, message.message_id)
+
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
         given_user_name = "New User"
+        await message.reply_text(
+            text="Send your localisation to be put in a group first please"
+        )
+        return
 
-    await append_chat_ids_messages(message.chat_id, message.message_id)
-    await message.reply_text(text="---")
+    await message.reply_text(text="There is ---")
     _LOGGER.info(f"/start :: {given_user_name=}")
 
 
@@ -173,7 +179,11 @@ async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
     user_new_name = await build_user_hash(user.full_name)
 
     await append_chat_ids_messages(message.chat_id, message.message_id)
-    _USERS, _GROUPS = await populate_new_user_to_appropriate_group(
+    (
+        _USERS,
+        _GROUPS,
+        count_user_same_group,
+    ) = await populate_new_user_to_appropriate_group(
         user_new_name=user_new_name,
         current_chat_id=message.chat_id,
         latitude=location.latitude,
@@ -195,7 +205,7 @@ async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> N
         text=html_format_text(
             build_welcome_location_message_for_current_user(
                 user_new_name,
-                _USERS,
+                count_user_same_group,
                 user.language_code or "en",
             )
         )
