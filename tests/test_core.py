@@ -113,7 +113,7 @@ async def test_populate_new_user_to_appropriate_group(
     mocker: MockType,
 ) -> None:
     mocker.patch(
-        "tchaka.core.group_coordinates", return_value={"group1": [(50.0, 60.0)]}
+        "tchaka.core.group_coordinates", return_value=({"group1": [(50.0, 60.0)]}, 1)
     )
 
     new_user_name = "user1"
