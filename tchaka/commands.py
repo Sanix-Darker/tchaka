@@ -66,6 +66,7 @@ async def start_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
 
 async def check_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     """
+    TODO: not working yet, will be fixed in future version
     CheckCallBack to check how many people are in the area
 
     """
