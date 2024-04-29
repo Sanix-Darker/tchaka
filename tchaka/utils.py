@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import Any
 from telegram import Message, Update, User
 import logging
 import html
@@ -57,7 +56,7 @@ async def build_user_hash(fullname: str) -> str:
 
 def build_welcome_location_message_for_current_user(
     user_new_name: str,
-    users_list: dict[str, Any],
+    users_list_count: int,
     lang: str,
 ) -> str:
     """
@@ -68,11 +67,11 @@ def build_welcome_location_message_for_current_user(
     if lang == "fr":
         suggest_to_connect = (
             (
-                f"Il y a ({len(users_list)-1}) personnes dans la meme zone que "
+                f"Il y a ({users_list_count}) personnes dans la meme zone que "
                 "vous. ils sont avertis.\n"
                 "N'hesitez pas a dire bonjour.\n"
             )
-            if len(users_list) > 1
+            if users_list_count > 1
             else ("0 utilisateurs ici pour le moment.\n")
         )
         final_msg = (
@@ -85,11 +84,11 @@ def build_welcome_location_message_for_current_user(
     else:
         suggest_to_connect = (
             (
-                f"There is ({len(users_list)-1}) people in the same area than "
+                f"There is ({users_list_count}) people in the same area than "
                 "you. They just get notified.\n"
                 "Feel free to say hi.\n"
             )
-            if len(users_list) > 1
+            if users_list_count > 1
             else ("0 users here for now.\n")
         )
         final_msg = (

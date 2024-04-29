@@ -35,7 +35,7 @@ async def test_group_coordinates():
         (2.8205, 4.0055),
         (52.5200, 13.4060),
     ]
-    grouped_coordinates = await group_coordinates(
+    grouped_coordinates, count_u = await group_coordinates(
         coordinates,
         distance_threshold=100,
     )
@@ -124,6 +124,7 @@ async def test_populate_new_user_to_appropriate_group(
     (
         updated_user_list,
         updated_group_list,
+        count_u,
     ) = await populate_new_user_to_appropriate_group(
         new_user_name, current_chat_id, latitude, longitude, {}, {}
     )

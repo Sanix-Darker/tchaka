@@ -10,7 +10,7 @@ LANG_MESSAGES = {
     "fr": {
         "WELCOME_MESSAGE": """Bienvenue sur Tchaka!
 Commencez par envoyer votre localisation (aucun soucis, c est anonyme et rien
-ne se sauvegardes.):""",
+ne se sauvegardes)""",
         "HELP_MESSAGE": """/start - Pour demarrer.
 /help - Comment cela fonctionne.
 /stop - Pour stoper le bot et cleaner toutes vos infos.
