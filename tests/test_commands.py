@@ -1,5 +1,5 @@
 from unittest.mock import ANY, AsyncMock, MagicMock
-
+from pytest_mock import MockerFixture
 import pytest
 from telegram import Message, Update, User
 from telegram.ext import ContextTypes
@@ -26,7 +26,10 @@ def context():
 
 
 @pytest.mark.anyio
-async def test_start_callback(update, context):
+async def test_start_callback(
+    mocker: MockerFixture, update: MagicMock, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    mocker.patch("tchaka.commands.append_chat_ids_messages")
     update.message.chat_id = 123
     update.effective_user.full_name = "John Doe"
     message = update.message.reply_text = AsyncMock()
@@ -35,7 +38,10 @@ async def test_start_callback(update, context):
 
 
 @pytest.mark.anyio
-async def test_help_callback(update, context):
+async def test_help_callback(
+    mocker: MockerFixture, update: MagicMock, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    mocker.patch("tchaka.commands.append_chat_ids_messages")
     update.message.chat_id = 123
     update.effective_user.full_name = "John Doe"
     message = update.message.reply_text = AsyncMock()
@@ -44,7 +50,10 @@ async def test_help_callback(update, context):
 
 
 @pytest.mark.anyio
-async def test_echo_callback(update, context):
+async def test_echo_callback(
+    update: MagicMock,
+    context: ContextTypes.DEFAULT_TYPE,
+) -> None:
     update.message.chat_id = 123
     update.effective_user.full_name = "John Doe"
     update.message.text = "This is a test message"
