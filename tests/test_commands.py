@@ -3,8 +3,9 @@ from pytest_mock import MockerFixture
 import pytest
 from telegram import Message, Update, User
 from telegram.ext import ContextTypes
+from tchaka import commands as tchaka_commands_module
 
-from tchaka.commands import start_callback, help_callback, echo_callback
+from tchaka.commands import append_chat_ids_messages, start_callback, help_callback, echo_callback
 
 
 @pytest.fixture
@@ -60,3 +61,11 @@ async def test_echo_callback(
     await echo_callback(
         update, context
     )  # no errors for now, tests are going to be defined soon or later
+
+@pytest.mark.anyio
+async def test_attach_chat_id_to_message_ids(mocker: MockerFixture) -> None:
+    await append_chat_ids_messages(1, 34)
+    await append_chat_ids_messages(10, 234)
+
+    id_msgs = await append_chat_ids_messages(1, 40)
+    assert id_msgs == {1: [34, 35, 36, 37, 38, 39, 40], 10: [234]}

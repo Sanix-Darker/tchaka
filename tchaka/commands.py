@@ -29,7 +29,10 @@ _CHAT_IDS_MSGS: dict[int, list[int]] = {}
 _GROUPS: dict[str, Any] = {}
 
 
-async def append_chat_ids_messages(chat_id: int, message_id: int) -> None:
+async def append_chat_ids_messages(
+    chat_id: int,
+    message_id: int
+) -> dict[int, list[int]]:
     global _CHAT_IDS_MSGS
 
     if chat_id in _CHAT_IDS_MSGS:
@@ -40,6 +43,8 @@ async def append_chat_ids_messages(chat_id: int, message_id: int) -> None:
             _CHAT_IDS_MSGS[chat_id].append(latest_inserted)
     else:
         _CHAT_IDS_MSGS[chat_id] = [message_id]
+
+    return _CHAT_IDS_MSGS
 
 
 async def start_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
