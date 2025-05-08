@@ -65,7 +65,7 @@ async def group_coordinates(
                     users_in_same_group = len(groups[group_id])
                 break
         if not group_found:
-            groups[f"___G-{len(groups)+1}"] = [coord]
+            groups[f"___G-{len(groups) + 1}"] = [coord]
 
     return groups, users_in_same_group
 
