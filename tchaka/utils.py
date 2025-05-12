@@ -12,7 +12,8 @@ logging.basicConfig(level=logging.INFO)
 
 
 def safe_truncate(message: str | None, at: int = 100) -> str:
-    message = message or ""
+    if not message:
+        return ""
 
     points = ""
     if len(message) > at:
@@ -74,29 +75,27 @@ def build_welcome_location_message_for_current_user(
             if users_list_count > 1
             else ("0 utilisateurs ici pour le moment.\n")
         )
-        final_msg = (
+        return (
             f"Localisation reçue !!!\n"
             f"Maintenant, vous etes ***__{user_new_name}__***.\n"
             f"{suggest_to_connect}\n"
             "Remarque : Tout ici est crypte et le chat sera nettoye lorsque vous changerez de lieu.\n\n"
             "Pour toute question, signalez au dev @sanixdarker"
         )
-    else:
-        suggest_to_connect = (
-            (
-                f"There is ({users_list_count}) people in the same area than "
-                "you. They just get notified.\n"
-                "Feel free to say hi.\n"
-            )
-            if users_list_count > 1
-            else ("0 users here for now.\n")
-        )
-        final_msg = (
-            f"Location received !!!\n"
-            f"Now, your are ***__{user_new_name}__***.\n"
-            f"{suggest_to_connect}\n"
-            "Note: Everything here is encrypted and the chat will be cleaned when you change place.\n"
-            "For any question, please address to @sanixdarker"
-        )
 
-    return final_msg
+    suggest_to_connect = (
+        (
+            f"There is ({users_list_count}) people in the same area than "
+            "you. They just get notified.\n"
+            "Feel free to say hi.\n"
+        )
+        if users_list_count > 1
+        else ("0 users here for now.\n")
+    )
+    return (
+        f"Location received !!!\n"
+        f"Now, your are ***__{user_new_name}__***.\n"
+        f"{suggest_to_connect}\n"
+        "Note: Everything here is encrypted and the chat will be cleaned when you change place.\n"
+        "For any question, please address to @sanixdarker"
+    )

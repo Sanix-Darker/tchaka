@@ -55,7 +55,7 @@ async def start_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     user, message = await get_user_and_message(update)
 
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
-        given_user_name = "New User"
+        given_user_name = f"New User :: {message.chat_id}"
 
     await append_chat_ids_messages(message.chat_id, message.message_id)
 
@@ -76,7 +76,7 @@ async def check_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     await append_chat_ids_messages(message.chat_id, message.message_id)
 
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
-        given_user_name = "New User"
+        given_user_name = f"New User :: {message.chat_id}"
         await message.reply_text(
             text="Send your localisation to be put in a group first please"
         )
@@ -95,11 +95,11 @@ async def stop_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     _, message = await get_user_and_message(update)
 
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
-        given_user_name = "New User"
+        given_user_name = f"New User :: {message.chat_id}"
         msg = "Not In the current chat flow, bot stoped."
     else:
-        # we don't care about groups, since it's rewrote on each call
-        # yes not optimial at all
+        # We don't care about groups, since it's rewrote on each call
+        # yes not optimial at all (for now)
         _USERS.pop(given_user_name, None)
         _CHAT_IDS.pop(message.chat_id, None)
         msg = f"Thanks using tchaka {given_user_name}, bot stoped.\nAll messages are going to be deleted."
@@ -122,7 +122,7 @@ async def help_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     user, message = await get_user_and_message(update)
 
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
-        given_user_name = "New User"
+        given_user_name = f"New User :: {message.chat_id}"
 
     help_message = LANG_MESSAGES[user.language_code or "en"]["HELP_MESSAGE"]
 
@@ -142,21 +142,22 @@ async def echo_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
     # SHould do nothing if the user is not yet in the system
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
-        given_user_name = "New User"
+        given_user_name = f"New User :: {message.chat_id}"
         _LOGGER.info(f"/echo :: {given_user_name}")
         return
 
-    if user_new_name := _CHAT_IDS.get(message.chat_id):
-        await dispatch_msg_in_group(
-            ctx=ctx,
-            user_new_name=user_new_name,
-            message=message,
-            user_list=_USERS,
-            group_list=_GROUPS,
-        )
-        _LOGGER.info(f"/echo :: {user_new_name=}")
-    else:
+    if not (user_new_name := _CHAT_IDS.get(message.chat_id)):
         _LOGGER.warning(f"/echo :: {user_new_name=}")
+        return
+
+    await dispatch_msg_in_group(
+        ctx=ctx,
+        user_new_name=user_new_name,
+        message=message,
+        user_list=_USERS,
+        group_list=_GROUPS,
+    )
+    _LOGGER.info(f"/echo :: {user_new_name=}")
 
 
 async def location_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
