@@ -30,9 +30,16 @@ _DISTANCE_DEGREE_KM = 111.32  # mean km length of 1° of latitude
 
 ## GeoSpatial helpers
 
+
 @lru_cache
 def haversine_distance(
-    lat1: float, lon1: float, lat2: float, lon2: float, /, *, radius: float = EARTH_RADIUS_KM
+    lat1: float,
+    lon1: float,
+    lat2: float,
+    lon2: float,
+    /,
+    *,
+    radius: float = EARTH_RADIUS_KM,
 ) -> float:
     """
     Return distance **in kilometres** between two WGS‑84 points.
@@ -124,8 +131,8 @@ async def group_coordinates(
     return dict(groups), users_in_same_group
 
 
-
 ## Telegram helpers (used by the 'front-end' of tchaka bot)
+
 
 async def dispatch_msg_in_group(
     ctx: ContextTypes.DEFAULT_TYPE,
@@ -170,7 +177,9 @@ async def dispatch_msg_in_group(
         and (lines := message.reply_to_message.text.splitlines())
     ):
         quote_author, quote_msg = lines[0], safe_truncate(lines[-1])
-        base_text = f"__**{user_new_name}**__\n```{quote_author}{quote_msg}```\n{truncated}"
+        base_text = (
+            f"__**{user_new_name}**__\n```{quote_author}{quote_msg}```\n{truncated}"
+        )
 
     async def _send(uname: str, cid: int) -> None:
         try:
