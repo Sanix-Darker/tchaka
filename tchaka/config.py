@@ -20,8 +20,7 @@ Si vous avez toujours un problème, veuillez contacter le dév
     },
     "en": {
         "WELCOME_MESSAGE": """Welcome to Tchaka!
-Start by sending your localisation and get guided (No worries, it is anonym and
-not stored):""",
+Start by sending your localisation and get guided (No worries, it is anonym and not stored)""",
         "HELP_MESSAGE": """/start - To get started.
 /help - How it works
 /stop - To Stop the bot and clean all your infos.

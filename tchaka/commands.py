@@ -55,7 +55,7 @@ async def start_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None
     user, message = await get_user_and_message(update)
 
     if not (given_user_name := _CHAT_IDS.get(message.chat_id)):
-        given_user_name = "New User"
+        given_user_name = f"New User :: {message.chat_id}"
 
     await append_chat_ids_messages(message.chat_id, message.message_id)
 
