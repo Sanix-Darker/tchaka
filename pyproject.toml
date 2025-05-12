@@ -17,6 +17,7 @@ mypy = "*"
 pytest = "*"
 pytest_mock = "*"
 trio = "*"
+pytest-asyncio = "^0.26.0"
 
 [build-system]
 requires = ["poetry-core"]

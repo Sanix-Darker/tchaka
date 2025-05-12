@@ -60,7 +60,7 @@ async def test_group_coordinates():
                 )
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_dispatch_msg_in_group(mocker: MockerFixture) -> None:
     ctx_mock = mocker.Mock()
     ctx_mock.bot.send_message = AsyncMock()
@@ -91,7 +91,7 @@ async def test_dispatch_msg_in_group(mocker: MockerFixture) -> None:
     assert ctx_mock.bot.send_message.call_count == 1
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_notify_all_user_on_the_same_group_for_join(
     mocker: MockerFixture,
 ) -> None:
