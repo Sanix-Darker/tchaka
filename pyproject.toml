@@ -8,7 +8,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-python-telegram-bot = "^22.5"
+python-telegram-bot = {version = "^22.5", extras = ["job-queue"]}
 python-dotenv = "*"
 
 [tool.poetry.group.dev.dependencies]
@@ -18,6 +18,11 @@ pytest = "*"
 pytest_mock = "*"
 trio = "*"
 pytest-asyncio = "^1.1.0"
+hypothesis = "^6.0"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
 
 [build-system]
 requires = ["poetry-core"]
