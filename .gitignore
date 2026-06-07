@@ -4,3 +4,6 @@ env
 *.pyc
 *_cache
 .hypothesis/
+.claude/
+.codex/
+TO-ASK*
