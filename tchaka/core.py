@@ -1,270 +1,248 @@
+"""Domain operations for tchaka.
+
+This layer sits between the typed state (:mod:`tchaka.state`) and the Telegram
+callbacks (:mod:`tchaka.commands`). It contains the decision logic for user
+registration, neighbor counting, join notification, message relay, message
+cleanup, and idle eviction.
+
+Concurrency rules (see design "Concurrency Model"):
+- Every read-modify-write on :class:`AppState` happens while holding
+  ``state.lock``.
+- Network I/O is **never** performed while holding the lock. Callers snapshot
+  the recipient list under the lock, release it, send, then briefly re-acquire
+  to track the real returned message ids.
+"""
+
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
-from functools import lru_cache
-from math import atan2, cos, radians, sin, sqrt
-from typing import Any, Dict, List, Tuple
+import logging
+from typing import TYPE_CHECKING
 
-from telegram import Message
 from telegram.constants import ParseMode
 from telegram.error import BadRequest, Forbidden
-from telegram.ext import ContextTypes
 
-from tchaka.utils import html_format_text, logging, safe_truncate
+# Re-export the pure geo helpers so existing imports keep working.
+from tchaka.geo import EARTH_RADIUS_KM, group_coordinates, haversine_distance
+from tchaka.state import AppState, Coord, UserRecord
+from tchaka.utils import Clock, html_format_text, safe_truncate
+
+if TYPE_CHECKING:
+    from telegram import Bot, Message
 
 __all__ = [
+    "EARTH_RADIUS_KM",
     "haversine_distance",
     "group_coordinates",
-    "dispatch_msg_in_group",
-    "notify_all_user_on_the_same_group_for_join",
-    "populate_new_user_to_appropriate_group",
-    "clean_all_msg",
+    "count_nearby",
+    "register_user",
+    "notify_group_join",
+    "relay_message",
+    "cleanup_messages",
+    "evict_idle_users",
+    "format_relay_body",
 ]
 
 _LOGGER = logging.getLogger(__name__)
-EARTH_RADIUS_KM = 6_371.0088
 MAX_BAD_REQUEST_ERROR = 10
-_DISTANCE_DEGREE_KM = 111.32  # mean km length of 1° of latitude
 
 
-## GeoSpatial helpers
+# --------------------------------------------------------------------------- #
+# Neighborhood / counting
+# --------------------------------------------------------------------------- #
+def count_nearby(state: AppState, user_id: str, threshold_km: float) -> int:
+    """Number of OTHER users within ``threshold_km`` of ``user_id``. Excludes
+    the requesting user."""
+    return len(state.neighbors(user_id, threshold_km))
 
 
-@lru_cache
-def haversine_distance(
-    lat1: float,
-    lon1: float,
-    lat2: float,
-    lon2: float,
-    /,
+# --------------------------------------------------------------------------- #
+# Registration
+# --------------------------------------------------------------------------- #
+def register_user(
+    state: AppState,
     *,
-    radius: float = EARTH_RADIUS_KM,
-) -> float:
+    user_id: str,
+    chat_id: int,
+    coord: Coord,
+    lang: str,
+    clock: Clock,
+) -> UserRecord:
+    """Insert a typed user record (caller holds ``state.lock``).
+
+    No float coordinate is ever used as a key; the coordinate lives inside the
+    record only.
     """
-    Return distance **in kilometres** between two WGS‑84 points.
-
-    See details for the formula :
-        https://gis.stackexchange.com/questions/178201/calculate-the-distance-between-two-coordinates-wgs84-in-etrs89
-    """
-    φ1, λ1, φ2, λ2 = map(radians, (lat1, lon1, lat2, lon2))
-    dφ, dλ = φ2 - φ1, λ2 - λ1
-    a = sin(dφ / 2) ** 2 + cos(φ1) * cos(φ2) * sin(dλ / 2) ** 2
-    return radius * 2 * atan2(sqrt(a), sqrt(1 - a))
-
-
-def _hash_cell(lat: float, lon: float, cell_km: int) -> tuple[int, int]:
-    """Bucket a lat/lon into a square cell of about *cell_km* km."""
-    step = cell_km / _DISTANCE_DEGREE_KM
-    return int(lat / step), int(lon / step)
-
-
-async def group_coordinates(
-    coordinates: List[Tuple[float, float]],
-    *,
-    distance_threshold: int = 100,
-    user_coords: Tuple[float, float] | None = None,
-) -> Tuple[Dict[str, List[Tuple[float, float]]], int]:
-    """Cluster *coordinates* by geographic proximity.
-
-    A coarse spatial hash first bins points into ~*distance_threshold*‑sized
-    buckets.  We then use union‑find over neighbouring buckets to build
-    clusters in *≈O(n)* expected time.
-
-    ``returns (groups, n_users_in_current_user_group)``
-    """
-
-    if not coordinates:
-        return {}, 0
-
-    cell_km = max(distance_threshold, 50)  # at least 50 km cells for hashing
-    cells: Dict[tuple[int, int], List[int]] = defaultdict(list)
-    for idx, (lat, lon) in enumerate(coordinates):
-        cells[_hash_cell(lat, lon, cell_km)].append(idx)
-
-    parent = list(range(len(coordinates)))
-
-    def find(i: int) -> int:
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    def union(i: int, j: int) -> None:
-        pi, pj = find(i), find(j)
-        if pi != pj:
-            parent[pj] = pi
-
-    neighbours = [(dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1)]
-
-    for (cx, cy), idxs in cells.items():
-        candidate_idxs: List[int] = []
-        for dx, dy in neighbours:
-            candidate_idxs.extend(cells.get((cx + dx, cy + dy), []))
-
-        for i in idxs:
-            lat_i, lon_i = coordinates[i]
-            for j in candidate_idxs:
-                if j <= i:
-                    continue  # skip duplicate checks
-                lat_j, lon_j = coordinates[j]
-                if (
-                    abs(lat_i - lat_j) * _DISTANCE_DEGREE_KM > distance_threshold
-                    or abs(lon_i - lon_j) * _DISTANCE_DEGREE_KM > distance_threshold
-                ):
-                    continue  # cheap reject
-                if haversine_distance(lat_i, lon_i, lat_j, lon_j) <= distance_threshold:
-                    union(i, j)
-
-    groups: Dict[str, List[Tuple[float, float]]] = defaultdict(list)
-    for idx, coord in enumerate(coordinates):
-        gid = f"G-{find(idx)}"
-        groups[gid].append(coord)
-
-    users_in_same_group = 0
-    if user_coords is not None:
-        for members in groups.values():
-            if user_coords in members:
-                users_in_same_group = len(members)
-                break
-
-    return dict(groups), users_in_same_group
-
-
-## Telegram helpers (used by the 'front-end' of tchaka bot)
-
-
-async def dispatch_msg_in_group(
-    ctx: ContextTypes.DEFAULT_TYPE,
-    user_new_name: str,
-    message: Message,
-    user_list: Dict[str, Any],
-    group_list: Dict[str, List[Tuple[float, float]]],
-) -> None:
-    """Relay *message* to everybody who shares the same geo‑cluster."""
-
-    from tchaka.commands import append_chat_ids_messages
-
-    try:
-        _, current_location = user_list[user_new_name]
-    except KeyError:
-        # sender not yet registered – nothing to do...
-        return
-
-    # quick reverse lookup {coord: group_id}
-    coord_to_group = {
-        coord: gid for gid, coords in group_list.items() for coord in coords
-    }
-    group_id = coord_to_group.get(current_location)
-    if group_id is None:
-        return
-
-    recipients = [
-        (uname, info[0])
-        for uname, info in user_list.items()
-        if uname != user_new_name and info[1] in group_list[group_id]
-    ]
-    if not recipients:
-        return
-
-    # build outgoing text once
-    truncated = safe_truncate(message.text, 200)
-    base_text = f"__**{user_new_name}**__\n\n{truncated}"
-
-    if (
-        message.reply_to_message
-        and message.reply_to_message.text
-        and (lines := message.reply_to_message.text.splitlines())
-    ):
-        quote_author, quote_msg = lines[0], safe_truncate(lines[-1])
-        base_text = (
-            f"__**{user_new_name}**__\n```{quote_author}{quote_msg}```\n{truncated}"
-        )
-
-    async def _send(uname: str, cid: int) -> None:
-        try:
-            sent = await ctx.bot.send_message(
-                chat_id=cid, text=base_text, parse_mode=ParseMode.MARKDOWN
-            )
-            await append_chat_ids_messages(cid, sent.message_id)
-        except (Forbidden, BadRequest):
-            _LOGGER.debug("Deliver failed for %s", uname)
-        except Exception:
-            _LOGGER.exception("Unexpected error delivering to %s", uname)
-
-    await asyncio.gather(*(_send(u, c) for u, c in recipients))
-
-
-async def notify_all_user_on_the_same_group_for_join(
-    ctx: ContextTypes.DEFAULT_TYPE,
-    current_chat_id: int,
-    user_new_name: str,
-    user_list: Dict[str, Any],
-) -> None:
-    """Broadcast a join notification to everyone except the new user."""
-
-    text = html_format_text(f"{user_new_name} joined the area…")
-    tasks = [
-        ctx.bot.send_message(chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN)
-        for chat_id, _ in user_list.values()
-        if chat_id != current_chat_id
-    ]
-
-    for coro in asyncio.as_completed(tasks):
-        try:
-            await coro
-        except (BadRequest, Forbidden):
-            pass  # ignore users who blocked the bot
-        except Exception:
-            _LOGGER.exception("Failed to ping a user")
-
-
-async def populate_new_user_to_appropriate_group(
-    user_new_name: str,
-    current_chat_id: int,
-    latitude: float,
-    longitude: float,
-    user_list: Dict[str, Any],
-    group_list: Dict[str, Any],
-) -> Tuple[Dict[str, Any], Dict[str, Any], int]:
-    """Register a new user and recompute geo‑clusters."""
-
-    user_list[user_new_name] = [current_chat_id, (latitude, longitude)]
-    group_list, user_same_group = await group_coordinates(
-        [info[1] for info in user_list.values()],
-        distance_threshold=100,
-        user_coords=(latitude, longitude),
+    rec = UserRecord(
+        user_id=user_id,
+        chat_id=chat_id,
+        coord=coord,
+        last_active_ts=clock.now(),
+        lang=lang,
     )
-    return user_list, group_list, user_same_group
+    state.register(rec)
+    return rec
 
 
-async def clean_all_msg(
-    message: Message,
-    ctx: ContextTypes.DEFAULT_TYPE,
-    list_of_msg_ids: List[int] | None = None,
+# --------------------------------------------------------------------------- #
+# Message formatting
+# --------------------------------------------------------------------------- #
+def format_relay_body(
+    sender_user_id: str,
+    text: str | None,
+    max_chars: int,
+    reply_excerpt: tuple[str, str] | None = None,
+) -> str:
+    """Build the outgoing relay text.
+
+    Contains only the sender's anonymized ``user_id`` -- never the sender's
+    chat id or full name (anonymity property P-ID-1).
+    """
+    truncated = safe_truncate(text, max_chars)
+    if reply_excerpt is not None:
+        quote_author, quote_msg = reply_excerpt
+        return f"__**{sender_user_id}**__\n```{quote_author}{quote_msg}```\n{truncated}"
+    return f"__**{sender_user_id}**__\n\n{truncated}"
+
+
+# --------------------------------------------------------------------------- #
+# Join notification (same-radius neighbors only -- fixes Issue #6)
+# --------------------------------------------------------------------------- #
+async def notify_group_join(
+    bot: Bot,
+    state: AppState,
+    *,
+    new_user: UserRecord,
+    recipients_snapshot: list[int],
 ) -> None:
-    """Best‑effort purge of previous messages with exponential back‑off."""
+    """Notify ONLY the chat ids in ``recipients_snapshot`` that a new user
+    joined.
 
-    await asyncio.sleep(1)  # give Telegram a moment to settle
+    ``recipients_snapshot`` must have been built under the lock and must
+    contain only neighbors within range of ``new_user`` and must exclude the
+    new user's own chat id.
+    """
+    text = html_format_text(f"{new_user.user_id} joined the area...")
 
-    def _range_from_ids(ids: List[int] | None) -> List[int]:
-        if not ids:
-            # heuristically delete up to 30 messages before the command
-            return list(range(max(1, message.message_id - 30), message.message_id))
-        # delete each id plus the two following ones (command + goodbye)
-        targets = {mid + offset for mid in ids for offset in (0, 1, 2)}
-        return sorted(targets)
+    async def _send(chat_id: int) -> None:
+        try:
+            sent = await bot.send_message(
+                chat_id=chat_id, text=text, parse_mode=ParseMode.MARKDOWN
+            )
+            async with state.lock:
+                state.track_message(chat_id, sent.message_id)
+        except (Forbidden, BadRequest):
+            _LOGGER.debug("join notify failed for chat_id=%s", chat_id)
+        except Exception:
+            _LOGGER.exception("unexpected error notifying chat_id=%s", chat_id)
+
+    await asyncio.gather(*(_send(cid) for cid in recipients_snapshot))
+
+
+# --------------------------------------------------------------------------- #
+# Message relay (same-radius neighbors only, never the sender)
+# --------------------------------------------------------------------------- #
+async def relay_message(
+    bot: Bot,
+    state: AppState,
+    *,
+    body: str,
+    recipients_snapshot: list[int],
+) -> None:
+    """Deliver ``body`` to each chat id in ``recipients_snapshot``.
+
+    The snapshot excludes the sender by construction. Only message ids actually
+    returned by Telegram are tracked (no fabricated ids -- fixes Issue #7).
+    """
+
+    async def _send(chat_id: int) -> None:
+        try:
+            sent = await bot.send_message(
+                chat_id=chat_id, text=body, parse_mode=ParseMode.MARKDOWN
+            )
+            async with state.lock:
+                state.track_message(chat_id, sent.message_id)
+        except (Forbidden, BadRequest):
+            _LOGGER.debug("relay failed for chat_id=%s", chat_id)
+        except Exception:
+            _LOGGER.exception("unexpected error relaying to chat_id=%s", chat_id)
+
+    await asyncio.gather(*(_send(cid) for cid in recipients_snapshot))
+
+
+# --------------------------------------------------------------------------- #
+# Message cleanup (only real, tracked ids -- fixes Issue #7)
+# --------------------------------------------------------------------------- #
+async def cleanup_messages(
+    bot: Bot,
+    chat_id: int,
+    msg_ids: set[int] | list[int] | None,
+) -> None:
+    """Best-effort deletion of the given *real* tracked message ids."""
+    if not msg_ids:
+        return
 
     consecutive_bad = 0
-    for mid in _range_from_ids(list_of_msg_ids):
+    for mid in sorted(msg_ids):
         try:
-            await ctx.bot.delete_message(chat_id=message.chat_id, message_id=mid)
+            await bot.delete_message(chat_id=chat_id, message_id=mid)
             consecutive_bad = 0
         except BadRequest:
             consecutive_bad += 1
             if consecutive_bad >= MAX_BAD_REQUEST_ERROR:
                 break
+        except Forbidden:
+            break  # user blocked the bot; stop trying
         except Exception:
             _LOGGER.exception("Deletion failed for %s", mid)
             break
-        await asyncio.sleep(0.05)  # yield control
+        await asyncio.sleep(0.05)  # gentle rate limit
+
+
+# --------------------------------------------------------------------------- #
+# Idle eviction (Issue #2)
+# --------------------------------------------------------------------------- #
+async def evict_idle_users(
+    bot: Bot,
+    state: AppState,
+    *,
+    now: float,
+    ttl: float,
+) -> list[str]:
+    """Evict every user idle for at least ``ttl`` seconds as of ``now``.
+
+    Phase 1 (under lock): identify idle users, remove them fully from state,
+    and collect their tracked message ids. Phase 2 (no lock): best-effort
+    delete those messages. Returns the list of evicted user ids.
+    """
+    to_clean: list[tuple[int, set[int]]] = []
+    evicted: list[str] = []
+
+    async with state.lock:
+        idle_ids = state.idle_user_ids(now, ttl)
+        for uid in idle_ids:
+            rec = state.users.get(uid)
+            if rec is None:
+                continue
+            state.remove_by_chat(rec.chat_id)
+            msg_ids = state.pop_tracked(rec.chat_id)
+            to_clean.append((rec.chat_id, msg_ids))
+            evicted.append(uid)
+
+    for chat_id, msg_ids in to_clean:
+        await cleanup_messages(bot, chat_id, msg_ids)
+
+    return evicted
+
+
+# --------------------------------------------------------------------------- #
+# Helper to build a reply excerpt from a replied-to message
+# --------------------------------------------------------------------------- #
+def build_reply_excerpt(message: Message) -> tuple[str, str] | None:
+    """Extract a (author, excerpt) tuple from a replied-to message, if any."""
+    replied = message.reply_to_message
+    if replied is not None and replied.text:
+        lines = replied.text.splitlines()
+        if lines:
+            return lines[0], safe_truncate(lines[-1])
+    return None
